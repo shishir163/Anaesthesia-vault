@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anaesthesia Vault</title>
+<meta name="description" content="Offline exam-prep notes and study planner for FCPS Anaesthesia — Written, Viva, OSPE, Long &amp; Short Case.">
+<meta name="theme-color" content="#0A1622">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=Lato:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+__CSS__
+</style>
+</head>
+<body>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <svg class="pulse" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="74" y="74" width="364" height="212" rx="30" fill="none" stroke="#22D3EE" stroke-width="26"/>
+        <polyline points="108,196 176,196 198,132 224,266 248,152 268,196 404,196"
+          stroke="#39FF88" stroke-width="26" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="96"  y="316" width="98" height="164" rx="49" fill="#22D3EE"/>
+        <rect x="207" y="316" width="98" height="164" rx="49" fill="#39FF88"/>
+        <rect x="318" y="316" width="98" height="164" rx="49" fill="#FFD166"/>
+      </svg>
+      <div>
+        <h1>Anaesthesia Vault</h1>
+        <span>FCPS exam prep</span>
+      </div>
+    </div>
+
+    <div class="mode-switch">
+      <button id="modeHomeBtn" class="active">🏠 Home</button>
+      <button id="modeNotesBtn">📝 Notes</button>
+      <button id="modePlannerBtn">🗓 Planner</button>
+      <button id="modeReviseBtn">🔥 Revise</button>
+    </div>
+
+    <div id="sideBody"></div>
+
+    <div class="sidebar-footer" id="sidebarFooter">
+      <button class="btn btn-primary" id="newNoteBtn" style="width:100%;justify-content:center;">+ New note</button>
+    </div>
+    <div class="sidebar-footer" id="backupBar" style="border-top:none;padding-top:0;">
+      <button class="btn btn-ghost" id="exportBtn" style="flex:1;justify-content:center;font-size:11.5px;padding:7px;">⬇ Backup</button>
+      <button class="btn btn-ghost" id="importBtn" style="flex:1;justify-content:center;font-size:11.5px;padding:7px;">⬆ Restore</button>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none;">
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <button class="icon-btn menu-toggle" id="menuToggle">☰</button>
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="searchInput" type="text" placeholder="Search title, content, topic, tag…">
+      </div>
+      <button class="theme-toggle" id="settingsBtn" title="Settings">⚙</button>
+    </div>
+
+    <div class="content" id="dashContent"></div>
+
+    <div class="content" id="notesContent" style="display:none;">
+      <h2 class="section-title" id="sectionTitle">All notes</h2>
+      <p class="section-sub" id="sectionSub"></p>
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <div class="content" id="plannerContent" style="display:none;">
+      <h2 class="section-title" id="plannerTitle">Today</h2>
+      <div class="planner-tabs">
+        <button class="planner-tab active" data-pview="today">Today</button>
+        <button class="planner-tab" data-pview="week">Week</button>
+        <button class="planner-tab" data-pview="month">Month</button>
+        <button class="planner-tab" data-pview="timetable">Timetable</button>
+      </div>
+      <div id="plannerBody"></div>
+    </div>
+    <div class="content" id="reviseContent" style="display:none;">
+      <h2 class="section-title" id="reviseTitle">Last-night revision</h2>
+      <div class="planner-tabs">
+        <button class="revise-tab active" data-rview="list">Revision list</button>
+        <button class="revise-tab" data-rview="activity">Activity</button>
+      </div>
+      <div id="reviseBody"></div>
+    </div>
+  </main>
+</div>
+
+<!-- EDITOR -->
+<div class="editor-overlay" id="editorOverlay">
+  <div class="editor">
+    <div class="editor-head">
+      <input class="title" id="titleInput" type="text" placeholder="Note title…">
+      <span class="autosave-flag" id="autosaveFlag"><span class="dot"></span>Ready</span>
+      <button class="icon-btn" id="closeEditorBtn">✕</button>
+    </div>
+
+    <div class="toolbar">
+      <select id="fontFamily" title="Font">
+        <option value="Plus Jakarta Sans">Sans</option>
+        <option value="Georgia">Serif</option>
+        <option value="JetBrains Mono">Mono</option>
+      </select>
+      <select id="fontSize" title="Size">
+        <option value="2">S</option>
+        <option value="3" selected>M</option>
+        <option value="4">L</option>
+        <option value="5">XL</option>
+        <option value="6">XXL</option>
+      </select>
+      <span class="sep"></span>
+      <button data-cmd="bold" title="Bold"><b>B</b></button>
+      <button data-cmd="italic" title="Italic"><i>I</i></button>
+      <button data-cmd="underline" title="Underline"><u>U</u></button>
+      <button id="markBtn" title="Highlighter">🖍</button>
+      <button id="imgBtn" title="Insert photo">🖼</button>
+      <input type="file" id="imgFile" accept="image/*" style="display:none;">
+      <input type="color" id="fontColor" title="Text colour" value="#22D3EE">
+      <span class="sep"></span>
+      <button data-cmd="insertUnorderedList" title="Bullet list">•—</button>
+      <button data-cmd="insertOrderedList" title="Numbered list">1.</button>
+      <button data-cmd="removeFormat" title="Clear formatting">Tx</button>
+    </div>
+
+    <div class="editor-body">
+      <div class="editable" id="editable" contenteditable="true" spellcheck="true"></div>
+    </div>
+
+    <div class="editor-meta">
+      <div class="meta-field">
+        <label>FOLDER</label>
+        <select id="folderSelect"></select>
+      </div>
+      <div class="meta-field">
+        <label>STATUS</label>
+        <select id="statusSelect"></select>
+      </div>
+      <div class="meta-field" style="flex:1;min-width:160px;">
+        <label>TAGS</label>
+        <input type="text" id="tagsInput" placeholder="e.g. spinal, LA-toxicity">
+      </div>
+    </div>
+    <div class="editor-meta">
+      <div class="exam-tags" id="examTags">
+        <button class="exam-tag-btn" data-tag="Written">Written</button>
+        <button class="exam-tag-btn" data-tag="Viva">Viva</button>
+        <button class="exam-tag-btn" data-tag="OSPE">OSPE</button>
+        <button class="exam-tag-btn" data-tag="Long Case">Long Case</button>
+        <button class="exam-tag-btn" data-tag="Short Case">Short Case</button>
+        <button class="exam-tag-btn" data-tag="Must-Know">Must-Know</button>
+        <button class="exam-tag-btn" data-tag="High-Yield">High-Yield</button>
+        <button class="exam-tag-btn" data-tag="Hard Topic">Hard Topic</button>
+      </div>
+    </div>
+
+    <div class="editor-foot">
+      <div class="left-actions">
+        <button class="btn btn-ghost" id="trashFromEditor">🗑 Trash</button>
+        <button class="btn btn-ghost" id="shareNoteBtn" title="Share">📤</button>
+        <button class="btn btn-ghost" id="jpegNoteBtn" title="Download as JPEG">🖼 JPEG</button>
+        <button class="btn btn-ghost" id="pdfNoteBtn" title="Print / Save as PDF">📄 PDF</button>
+      </div>
+      <button class="btn btn-primary" id="closeEditorBtn2" onclick="closeEditor()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- FOLDER MODAL -->
+<div class="modal-overlay" id="folderModal">
+  <div class="modal">
+    <h3>New folder</h3>
+    <input type="text" id="folderNameInput" placeholder="Folder name (e.g. Regional Anaesthesia)">
+    <div class="color-row" id="colorRow"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="folderModalCancel">Cancel</button>
+      <button class="btn btn-primary" id="folderModalSave">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- TASK MODAL (used by Week / Month views) -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal">
+    <h3>Add task</h3>
+    <input type="text" id="taskTitleInput" placeholder="What will you study?">
+    <div style="display:flex;gap:8px;">
+      <input type="date" id="taskDateInput" style="flex:1;">
+      <input type="time" id="taskTimeInput" style="flex:1;">
+    </div>
+    <input type="text" id="taskTopicInput" placeholder="Topic (optional, e.g. Regional)">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="taskModalCancel">Cancel</button>
+      <button class="btn btn-primary" id="taskModalSave">Add task</button>
+    </div>
+  </div>
+</div>
+
+<!-- TIMETABLE SLOT MODAL -->
+<div class="modal-overlay" id="slotModal">
+  <div class="modal">
+    <h3>Add study slot</h3>
+    <select id="slotDay"></select>
+    <div style="display:flex;gap:8px;">
+      <input type="time" id="slotStart" value="18:00" style="flex:1;">
+      <input type="time" id="slotEnd" value="19:00" style="flex:1;">
+    </div>
+    <input type="text" id="slotSubject" placeholder="Topic / subject (e.g. Spinal anaesthesia)">
+    <div class="color-row" id="slotColorRow"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="slotModalCancel">Cancel</button>
+      <button class="btn btn-primary" id="slotModalSave">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal wide">
+    <h3>Settings</h3>
+
+    <div class="set-group">
+      <label>THEME</label>
+      <div class="theme-grid" id="themeGrid"></div>
+    </div>
+
+    <div class="set-group">
+      <label>NOTE TEXT</label>
+      <div class="set-row">
+        <select id="setNoteFont">
+          <option value="'Plus Jakarta Sans', system-ui, sans-serif">Sans</option>
+          <option value="'Lato', system-ui, sans-serif">Lato</option>
+          <option value="Georgia, 'Times New Roman', serif">Serif</option>
+          <option value="'JetBrains Mono', ui-monospace, monospace">Mono</option>
+        </select>
+        <select id="setNoteSize">
+          <option value="13px">Small</option>
+          <option value="14.5px">Medium</option>
+          <option value="16.5px">Large</option>
+          <option value="19px">Extra large</option>
+        </select>
+        <select id="setNoteWeight">
+          <option value="400">Regular</option>
+          <option value="700">Bold</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="set-group">
+      <label>EXAM DATE</label>
+      <input type="date" id="setExamDate">
+    </div>
+
+    <div class="set-group">
+      <label>WEEK STARTS ON</label>
+      <select id="setWeekStart">
+        <option value="6">Saturday</option>
+        <option value="0">Sunday</option>
+        <option value="1">Monday</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="settingsClose">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="printArea"></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+__JS__
+</script>
+</body>
+</html>
