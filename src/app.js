@@ -32,6 +32,7 @@ const state = {
   revOpenId: null,        // note expanded inline in the revision list
   activity: [],
   actRange: 'week',       // week | month
+  backupNagHidden: false, // 'Later' only hides it for this session
 
   // ---- Phase 5: settings ----
   settings: {
@@ -41,6 +42,8 @@ const state = {
     noteWeight: '400',
     examDate: '',
     weekStart: 6,         // JS getDay index: 6=Sat, 0=Sun, 1=Mon
+    backupReminderDays: 3,
+    lastBackupAt: 0,
   },
 };
 
@@ -199,6 +202,8 @@ function allUserTags(){
 
 /* ---------------- Sidebar ---------------- */
 function renderSidebar(){
+  const dot = $('#backupDot');
+  if(dot) dot.style.display = backupOverdue() ? 'inline-block' : 'none';
   const body = $('#sideBody');
   if(state.mode === 'notes')        renderNotesSidebar(body);
   else if(state.mode === 'planner') renderPlannerSidebar(body);
@@ -627,7 +632,10 @@ function renderMonth(){
   const todayIso = todayISO();
 
   const tasksByDate = {};
-  state.tasks.forEach(t => { (tasksByDate[t.date] ||= []).push(t); });
+  state.tasks.forEach(t => {
+    if(!tasksByDate[t.date]) tasksByDate[t.date] = [];
+    tasksByDate[t.date].push(t);
+  });
 
   $('#plannerBody').innerHTML = `
     <div class="month-nav">
@@ -737,7 +745,7 @@ async function saveSlotModal(){
   const slot = {
     id: uid(), day: Number($('#slotDay').value),
     start: $('#slotStart').value, end: $('#slotEnd').value,
-    subject, color: $('#slotColorRow .color-swatch.sel')?.dataset.color || FOLDER_COLORS[0],
+    subject, color: (function(){ var el = $('#slotColorRow .color-swatch.sel'); return el ? el.dataset.color : FOLDER_COLORS[0]; })(),
     createdAt: Date.now()
   };
   await DB.putSlot(slot);
@@ -994,12 +1002,58 @@ async function exportBackup(){
   try{
     const data = await DB.exportAll();
     const stamp = new Date().toISOString().slice(0,10);
-    downloadBlob(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}),
-                 `anaesthesia-vault-backup-${stamp}.json`);
+    const name = `anaesthesia-vault-backup-${stamp}.json`;
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], {type:'application/json'});
+
+    // On a phone, hand the file to the share sheet so it can go straight
+    // into Google Drive. On a laptop that isn't available, so download it.
+    let shared = false;
+    try{
+      if(navigator.canShare && window.File){
+        const file = new File([blob], name, {type:'application/json'});
+        if(navigator.canShare({ files:[file] })){
+          await navigator.share({ files:[file], title:'Anaesthesia Vault backup' });
+          shared = true;
+        }
+      }
+    }catch(err){
+      // user cancelled the sheet, or the browser refused the file type
+      if(err && err.name === 'AbortError') return;
+      shared = false;
+    }
+
+    if(!shared) downloadBlob(blob, name);
+
+    state.settings.lastBackupAt = Date.now();
+    await saveSettings();
+    if(state.mode === 'home') renderDashboard();
+    renderSidebar();
     toast(`Backed up ${data.notes.length} notes`);
   }catch(err){
     toast('Backup failed');
   }
+}
+
+/* ---- backup reminder ---- */
+function daysSinceBackup(){
+  const t = state.settings.lastBackupAt;
+  if(!t) return null;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+function backupOverdue(){
+  const every = Number(state.settings.backupReminderDays || 0);
+  if(!every) return false;                    // reminders switched off
+  if(state.notes.length === 0) return false;  // nothing worth backing up yet
+  const d = daysSinceBackup();
+  return d === null || d >= every;
+}
+function backupStatusText(){
+  const d = daysSinceBackup();
+  if(d === null) return 'never backed up';
+  if(d === 0) return 'backed up today';
+  if(d === 1) return 'backed up yesterday';
+  return `backed up ${d} days ago`;
 }
 
 async function importBackup(file){
@@ -1249,6 +1303,8 @@ function openSettings(){
   $('#setNoteWeight').value = s.noteWeight;
   $('#setExamDate').value  = s.examDate || '';
   $('#setWeekStart').value = String(s.weekStart);
+  $('#setBackupEvery').value = String(s.backupReminderDays);
+  $('#backupStatus').textContent = backupStatusText();
 
   $$('[data-theme-id]').forEach(b => b.onclick = async () => {
     state.settings.theme = b.dataset.themeId;
@@ -1264,6 +1320,7 @@ async function commitSettingsForm(){
   state.settings.noteWeight = $('#setNoteWeight').value;
   state.settings.examDate  = $('#setExamDate').value;
   state.settings.weekStart = Number($('#setWeekStart').value);
+  state.settings.backupReminderDays = Number($('#setBackupEvery').value);
   await saveSettings();
   $('#settingsModal').classList.remove('show');
   switchMode(state.mode);
@@ -1314,7 +1371,15 @@ function renderDashboard(){
     countdownHTML = `<div class="countdown"><span class="l">Exam date has passed — update it in settings.</span></div>`;
   }
 
+  const showNag = backupOverdue() && !state.backupNagHidden;
+
   $('#dashContent').innerHTML = `
+    ${showNag ? `<div class="backup-banner">
+      <div class="txt"><b>Time to back up</b>Your notes live only on this device — ${backupStatusText()}. Save a copy to Google Drive so you can restore it on your other devices.</div>
+      <button id="nagBackup">Back up now</button>
+      <button class="later" id="nagLater">Later</button>
+    </div>` : ''}
+
     <div class="hero">
       <div class="greet">${greeting()}</div>
       <div class="big">${todays.length ? `${doneToday} of ${todays.length} tasks done today` : 'No tasks planned for today'}</div>
@@ -1394,6 +1459,8 @@ function renderDashboard(){
     else { state.view='all'; switchMode('notes'); }
   });
   if($('#dashSetExam')) $('#dashSetExam').onclick = openSettings;
+  if($('#nagBackup')) $('#nagBackup').onclick = exportBackup;
+  if($('#nagLater')) $('#nagLater').onclick = () => { state.backupNagHidden = true; renderDashboard(); };
   $('#dashQaAdd').onclick = async () => {
     const title = $('#dashQaTitle').value.trim();
     if(!title) return;
@@ -1573,7 +1640,8 @@ function openFolderModal(){
 async function saveFolderModal(){
   const name = $('#folderNameInput').value.trim();
   if(!name) return;
-  const color = $('.color-swatch.sel')?.dataset.color || FOLDER_COLORS[0];
+  const selSwatch = $('.color-swatch.sel');
+  const color = selSwatch ? selSwatch.dataset.color : FOLDER_COLORS[0];
   const folder = { id: uid(), name, color, createdAt: Date.now() };
   await DB.putFolder(folder);
   state.folders.push(folder);
@@ -1683,4 +1751,36 @@ function icon(name, size=16){
   return `<svg ${s}>${paths[name]||''}</svg>`;
 }
 
-boot();
+/* ---------------- Startup safety net ----------------
+   If anything fails (old browser, blocked storage, in-app browser),
+   say so plainly instead of showing a dead screen. */
+function fatalScreen(title, detail){
+  document.body.innerHTML =
+    '<div style="max-width:520px;margin:12vh auto;padding:28px;font-family:system-ui,sans-serif;' +
+    'color:#E8F1F8;background:#12283F;border:1px solid #1C3A54;border-radius:16px;line-height:1.6">' +
+    '<div style="font-size:19px;font-weight:800;margin-bottom:10px">' + title + '</div>' +
+    '<div style="font-size:14px;color:#8FAEC4">' + detail + '</div></div>';
+}
+
+function storageAvailable(){
+  try { return typeof indexedDB !== 'undefined' && indexedDB !== null; }
+  catch(e){ return false; }
+}
+
+window.addEventListener('error', function(e){
+  if(!document.querySelector('.app')) return;
+  console.error('Anaesthesia Vault error:', e.error || e.message);
+});
+
+if(!storageAvailable()){
+  fatalScreen('This browser can\'t store your notes',
+    'Open this page in Chrome or Safari directly (not inside WhatsApp, Facebook or another app\u2019s built-in browser), ' +
+    'then use the browser menu to Add to Home Screen.');
+} else {
+  boot().catch(function(err){
+    console.error(err);
+    fatalScreen('Something went wrong starting the app',
+      'Please open this link in an up-to-date Chrome or Safari. If it keeps happening, note down which phone and browser you are using.<br><br>' +
+      '<span style="font-family:monospace;font-size:12px;opacity:.7">' + (err && err.message ? err.message : err) + '</span>');
+  });
+}

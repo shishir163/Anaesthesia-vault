@@ -52,7 +52,7 @@ __CSS__
       <button class="btn btn-primary" id="newNoteBtn" style="width:100%;justify-content:center;">+ New note</button>
     </div>
     <div class="sidebar-footer" id="backupBar" style="border-top:none;padding-top:0;">
-      <button class="btn btn-ghost" id="exportBtn" style="flex:1;justify-content:center;font-size:11.5px;padding:7px;">⬇ Backup</button>
+      <button class="btn btn-ghost" id="exportBtn" style="flex:1;justify-content:center;font-size:11.5px;padding:7px;">⬇ Backup<span class="side-dot" id="backupDot" style="display:none"></span></button>
       <button class="btn btn-ghost" id="importBtn" style="flex:1;justify-content:center;font-size:11.5px;padding:7px;">⬆ Restore</button>
       <input type="file" id="importFile" accept="application/json,.json" style="display:none;">
     </div>
@@ -260,6 +260,16 @@ __CSS__
     <div class="set-group">
       <label>EXAM DATE</label>
       <input type="date" id="setExamDate">
+    </div>
+
+    <div class="set-group">
+      <label>BACKUP REMINDER</label>
+      <select id="setBackupEvery">
+        <option value="0">Off</option>
+        <option value="3">Every 3 days</option>
+        <option value="7">Every 7 days</option>
+      </select>
+      <div style="font-size:11px;color:var(--text-faint);font-family:var(--font-mono);margin-top:-4px;" id="backupStatus"></div>
     </div>
 
     <div class="set-group">

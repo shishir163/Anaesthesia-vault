@@ -484,7 +484,7 @@ input,textarea,select{ font-family:inherit; }
   padding-bottom:4px; font-weight:700;
 }
 .cal-cell{
-  aspect-ratio:1/0.85; background:var(--bg-card); border:1px solid var(--line); border-radius:var(--radius-s);
+  min-height:52px; aspect-ratio:1/0.85; background:var(--bg-card); border:1px solid var(--line); border-radius:var(--radius-s);
   padding:6px; cursor:pointer; position:relative; display:flex; flex-direction:column;
 }
 .cal-cell.outside{ opacity:.35; }
@@ -752,6 +752,8 @@ input,textarea,select{ font-family:inherit; }
 .stat .k{ color:var(--text-dim); font-weight:700; }
 
 .hero{
+  /* plain fallback first — older browsers ignore the color-mix rule below */
+  background:var(--bg-card);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--ecg) 14%, var(--bg-card)) 0%,
                             color-mix(in srgb, var(--violet) 12%, var(--bg-card)) 55%,
@@ -783,3 +785,24 @@ input,textarea,select{ font-family:inherit; }
   font-size:11.5px; line-height:1.55; color:var(--text-faint);
 }
 .side-hint b{ color:var(--text-dim); }
+
+/* ---- backup reminder ---- */
+.backup-banner{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  background:var(--bg-card); border:1px solid var(--resp);
+  border-left:4px solid var(--resp);
+  border-radius:var(--radius-m); padding:12px 14px; margin-bottom:16px;
+}
+.backup-banner .txt{ flex:1; min-width:180px; font-size:12.5px; line-height:1.5; }
+.backup-banner .txt b{ display:block; font-size:13.5px; margin-bottom:2px; }
+.backup-banner button{
+  background:var(--resp); color:var(--on-resp); border:none; border-radius:8px;
+  padding:8px 14px; font-size:12.5px; font-weight:800; cursor:pointer;
+}
+.backup-banner .later{
+  background:none; color:var(--text-faint); font-weight:700;
+}
+.side-dot{
+  width:7px; height:7px; border-radius:50%; background:var(--resp);
+  display:inline-block; margin-left:5px;
+}

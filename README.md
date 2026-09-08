@@ -45,6 +45,26 @@ Switch to "🔥 Revise" in the sidebar.
 - **Fuller sidebar** — Home, Planner and Revise each get their own sidebar now (shortcuts, counts, filters) instead of empty space.
 - **Colourful dashboard** — gradient stat cards, accent-striped section headers, and a new **Pinned notes** section.
 
+## Sharing it with colleagues
+Send them the GitHub Pages link, but tell them two things:
+
+1. **Don't use the link inside WhatsApp.** Tapping a link in WhatsApp opens WhatsApp's own mini-browser, which usually blocks offline storage — the page loads but nothing saves. They should tap the "⋯" menu → **Open in Chrome** (or Safari), then use the browser menu → **Add to Home Screen**.
+2. **They get their own empty vault.** There is no server and no account — every person's notes live only on their own device. Opening your link does not give them your notes.
+
+To actually give them your notes: press **⬇ Backup** in your sidebar, send them the `.json` file, and have them press **⬆ Restore** and pick it. That copies your notes, folders, tasks and timetable into their copy. After that their edits are their own — nothing syncs back to you.
+
+## Moving notes between your own devices (via Google Drive)
+There is no account and no automatic sync, so a backup file is how notes travel between your laptop and your phone.
+
+- **⬇ Backup on a phone** opens the share sheet — pick **Drive** and it saves straight to Google Drive.
+- **⬇ Backup on a laptop** downloads the `.json` file — put it in your Google Drive folder (or upload it to drive.google.com).
+- **⬆ Restore on the other device** — open the file from Drive and pick it. Items with the same id are overwritten; nothing else is deleted, so restoring is safe to repeat.
+
+The app reminds you when a backup is due. Set the interval in **⚙ Settings → Backup reminder** (Off / every 3 days / every 7 days; 3 days is the default). When it's due, a banner appears on Home and a dot appears on the Backup button. Settings also shows when you last backed up.
+
+## Browser support
+The app avoids post-2020 JavaScript syntax so it runs on older Android phones. If a phone still can't run it, the app shows a plain message explaining why instead of a blank screen.
+
 ## Run it locally (before deploying)
 You can't just double-click `index.html` — service workers need a server. From this folder:
 ```
