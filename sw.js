@@ -1,4 +1,4 @@
-const CACHE = 'anaes-vault-v8';
+const CACHE = 'anaes-vault-v9';
 const ASSETS = [
   './',
   './index.html',
