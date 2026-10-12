@@ -12,7 +12,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=Lato:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&family=Lato:wght@400;700&family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    Anaesthesia Vault — design tokens
@@ -89,9 +89,10 @@
   --radius-s: 6px;
   --radius-m: 10px;
   --radius-l: 16px;
-  --font-ui:   'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --note-font: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-ui:   'Lato', system-ui, sans-serif;
+  --font-mono: var(--font-ui);
+  --ui-weight: 400;
+  --note-font: 'Lato', system-ui, sans-serif;
   --note-size: 14.5px;
   --note-weight: 400;
 }
@@ -101,6 +102,7 @@ html,body{ height:100%; }
 body{
   margin:0;
   font-family:var(--font-ui);
+  font-weight:var(--ui-weight);
   background:var(--bg);
   color:var(--text);
   -webkit-font-smoothing:antialiased;
@@ -929,7 +931,6 @@ input,textarea,select{ font-family:inherit; }
       </svg>
       <div>
         <h1>Anaesthesia Vault</h1>
-        <span>FCPS exam prep</span>
       </div>
     </div>
 
@@ -947,7 +948,7 @@ input,textarea,select{ font-family:inherit; }
       <button class="btn btn-primary" id="newNoteBtn" style="width:100%;justify-content:center;">+ New note</button>
     </div>
     <div class="sidebar-footer" id="backupBar" style="border-top:none;padding-top:0;">
-      <button class="btn btn-ghost" id="exportBtn" style="flex:1;justify-content:center;font-size:11.5px;padding:7px;">⬇ Backup<span class="side-dot" id="backupDot" style="display:none"></span></button>
+      <button class="btn btn-ghost" id="exportBtn" style="flex:1;justify-content:center;font-size:11.5px;padding:7px;">⬇ Backup</button>
       <button class="btn btn-ghost" id="importBtn" style="flex:1;justify-content:center;font-size:11.5px;padding:7px;">⬆ Restore</button>
       <input type="file" id="importFile" accept="application/json,.json" style="display:none;">
     </div>
@@ -1011,7 +1012,9 @@ input,textarea,select{ font-family:inherit; }
 
     <div class="toolbar">
       <select id="fontFamily" title="Font">
-        <option value="Plus Jakarta Sans">Sans</option>
+        <option value="Lato">Lato</option>
+        <option value="Roboto">Roboto</option>
+        <option value="Poppins">Poppins</option>
         <option value="Georgia">Serif</option>
         <option value="JetBrains Mono">Mono</option>
       </select>
@@ -1137,11 +1140,24 @@ input,textarea,select{ font-family:inherit; }
     </div>
 
     <div class="set-group">
+      <label>APP FONT</label>
+      <select id="setAppFont">
+        <option value="lato">Lato (normal)</option>
+        <option value="lato-bold">Lato Bold</option>
+        <option value="roboto">Roboto</option>
+        <option value="poppins">Poppins</option>
+        <option value="jakarta">Plus Jakarta Sans</option>
+      </select>
+    </div>
+
+    <div class="set-group">
       <label>NOTE TEXT</label>
       <div class="set-row">
         <select id="setNoteFont">
-          <option value="'Plus Jakarta Sans', system-ui, sans-serif">Sans</option>
           <option value="'Lato', system-ui, sans-serif">Lato</option>
+          <option value="'Roboto', system-ui, sans-serif">Roboto</option>
+          <option value="'Poppins', system-ui, sans-serif">Poppins</option>
+          <option value="'Plus Jakarta Sans', system-ui, sans-serif">Jakarta</option>
           <option value="Georgia, 'Times New Roman', serif">Serif</option>
           <option value="'JetBrains Mono', ui-monospace, monospace">Mono</option>
         </select>
@@ -1161,16 +1177,6 @@ input,textarea,select{ font-family:inherit; }
     <div class="set-group">
       <label>EXAM DATE</label>
       <input type="date" id="setExamDate">
-    </div>
-
-    <div class="set-group">
-      <label>BACKUP REMINDER</label>
-      <select id="setBackupEvery">
-        <option value="0">Off</option>
-        <option value="3">Every 3 days</option>
-        <option value="7">Every 7 days</option>
-      </select>
-      <div style="font-size:11px;color:var(--text-faint);font-family:var(--font-mono);margin-top:-4px;" id="backupStatus"></div>
     </div>
 
     <div class="set-group">
@@ -1555,17 +1561,16 @@ const state = {
   revOpenId: null,        // note expanded inline in the revision list
   activity: [],
   actRange: 'week',       // week | month
-  backupNagHidden: false, // 'Later' only hides it for this session
 
   // ---- Phase 5: settings ----
   settings: {
     theme: 'icu',
-    noteFont: "'Plus Jakarta Sans', system-ui, sans-serif",
+    appFont: 'lato',
+    noteFont: "'Lato', system-ui, sans-serif",
     noteSize: '14.5px',
     noteWeight: '400',
     examDate: '',
     weekStart: 6,         // JS getDay index: 6=Sat, 0=Sun, 1=Mon
-    backupReminderDays: 3,
     lastBackupAt: 0,
   },
 
@@ -1734,8 +1739,6 @@ function allUserTags(){
 
 /* ---------------- Sidebar ---------------- */
 function renderSidebar(){
-  const dot = $('#backupDot');
-  if(dot) dot.style.display = backupOverdue() ? 'inline-block' : 'none';
   const body = $('#sideBody');
   if(state.mode === 'notes')        renderNotesSidebar(body);
   else if(state.mode === 'planner') renderPlannerSidebar(body);
@@ -2560,35 +2563,10 @@ async function exportBackup(){
 
     if(!shared) downloadBlob(blob, name);
 
-    state.settings.lastBackupAt = Date.now();
-    await saveSettings();
-    if(state.mode === 'home') renderDashboard();
-    renderSidebar();
     toast(`Backed up ${data.notes.length} notes`);
   }catch(err){
     toast('Backup failed');
   }
-}
-
-/* ---- backup reminder ---- */
-function daysSinceBackup(){
-  const t = state.settings.lastBackupAt;
-  if(!t) return null;
-  return Math.floor((Date.now() - t) / 86400000);
-}
-function backupOverdue(){
-  const every = Number(state.settings.backupReminderDays || 0);
-  if(!every) return false;                    // reminders switched off
-  if(state.notes.length === 0) return false;  // nothing worth backing up yet
-  const d = daysSinceBackup();
-  return d === null || d >= every;
-}
-function backupStatusText(){
-  const d = daysSinceBackup();
-  if(d === null) return 'never backed up';
-  if(d === 0) return 'backed up today';
-  if(d === 1) return 'backed up yesterday';
-  return `backed up ${d} days ago`;
 }
 
 async function importBackup(file){
@@ -2789,10 +2767,27 @@ function jpegNote(){
    Phase 5 — Settings + Dashboard
    ============================================================ */
 
+const APP_FONTS = {
+  'lato':      { family:"'Lato', system-ui, sans-serif",              weight:'400' },
+  'lato-bold': { family:"'Lato', system-ui, sans-serif",              weight:'700' },
+  'roboto':    { family:"'Roboto', system-ui, sans-serif",            weight:'400' },
+  'poppins':   { family:"'Poppins', system-ui, sans-serif",           weight:'400' },
+  'jakarta':   { family:"'Plus Jakarta Sans', system-ui, sans-serif", weight:'500' },
+};
+
 async function loadSettings(){
   const saved = await DB.getSetting('settings', null);
-  if(saved) state.settings = Object.assign({}, state.settings, saved);
-  else {
+  if(saved){
+    state.settings = Object.assign({}, state.settings, saved);
+    if(!saved.fontV2){   // one-time: whole app (notes included) moves to Lato regular
+      state.settings.appFont = 'lato';
+      state.settings.noteFont = "'Lato', system-ui, sans-serif";
+      state.settings.noteWeight = '400';
+      state.settings.fontV2 = true;
+      await DB.setSetting('settings', state.settings);
+    }
+    delete state.settings.backupReminderDays;
+  } else {
     // migrate the old binary theme setting from earlier versions
     const legacy = await DB.getSetting('theme', null);
     if(legacy === 'light') state.settings.theme = 'paper';
@@ -2807,6 +2802,9 @@ async function saveSettings(){
 function applySettings(){
   const s = state.settings;
   document.documentElement.setAttribute('data-theme', s.theme);
+  const af = APP_FONTS[s.appFont] || APP_FONTS.lato;
+  document.documentElement.style.setProperty('--font-ui', af.family);
+  document.documentElement.style.setProperty('--ui-weight', af.weight);
   document.documentElement.style.setProperty('--note-font', s.noteFont);
   document.documentElement.style.setProperty('--note-size', s.noteSize);
   document.documentElement.style.setProperty('--note-weight', s.noteWeight);
@@ -2834,14 +2832,16 @@ function openSettings(){
       <span class="nm">${t.name}</span>
       <span class="ty">${t.kind}</span>
     </button>`).join('');
+  $('#setAppFont').value   = s.appFont || 'lato';
   $('#setNoteFont').value  = s.noteFont;
   $('#setNoteSize').value  = s.noteSize;
   $('#setNoteWeight').value = s.noteWeight;
   $('#setExamDate').value  = s.examDate || '';
   $('#setWeekStart').value = String(s.weekStart);
-  $('#setBackupEvery').value = String(s.backupReminderDays);
-  $('#backupStatus').textContent = backupStatusText();
   renderCloudInfo();
+  // every choice takes effect straight away (no need to press Done first)
+  ['#setAppFont','#setNoteFont','#setNoteSize','#setNoteWeight','#setExamDate','#setWeekStart']
+    .forEach(sel => { $(sel).onchange = liveSettings; });
 
   $$('[data-theme-id]').forEach(b => b.onclick = async () => {
     state.settings.theme = b.dataset.themeId;
@@ -2903,13 +2903,20 @@ async function doCloudRefresh(){
   switchMode(state.mode);
 }
 
-async function commitSettingsForm(){
+function readSettingsForm(){
+  state.settings.appFont   = $('#setAppFont').value;
   state.settings.noteFont  = $('#setNoteFont').value;
   state.settings.noteSize  = $('#setNoteSize').value;
   state.settings.noteWeight = $('#setNoteWeight').value;
   state.settings.examDate  = $('#setExamDate').value;
   state.settings.weekStart = Number($('#setWeekStart').value);
-  state.settings.backupReminderDays = Number($('#setBackupEvery').value);
+}
+async function liveSettings(){
+  readSettingsForm();
+  await saveSettings();
+}
+async function commitSettingsForm(){
+  readSettingsForm();
   await saveSettings();
   $('#settingsModal').classList.remove('show');
   switchMode(state.mode);
@@ -2960,15 +2967,7 @@ function renderDashboard(){
     countdownHTML = `<div class="countdown"><span class="l">Exam date has passed — update it in settings.</span></div>`;
   }
 
-  const showNag = backupOverdue() && !state.backupNagHidden;
-
   $('#dashContent').innerHTML = `
-    ${showNag ? `<div class="backup-banner">
-      <div class="txt"><b>Time to back up</b>Your notes live only on this device — ${backupStatusText()}. Save a copy to Google Drive so you can restore it on your other devices.</div>
-      <button id="nagBackup">Back up now</button>
-      <button class="later" id="nagLater">Later</button>
-    </div>` : ''}
-
     <div class="hero">
       <div class="greet">${greeting()}</div>
       <div class="big">${todays.length ? `${doneToday} of ${todays.length} tasks done today` : 'No tasks planned for today'}</div>
@@ -3048,8 +3047,6 @@ function renderDashboard(){
     else { state.view='all'; switchMode('notes'); }
   });
   if($('#dashSetExam')) $('#dashSetExam').onclick = openSettings;
-  if($('#nagBackup')) $('#nagBackup').onclick = exportBackup;
-  if($('#nagLater')) $('#nagLater').onclick = () => { state.backupNagHidden = true; renderDashboard(); };
   $('#dashQaAdd').onclick = async () => {
     const title = $('#dashQaTitle').value.trim();
     if(!title) return;
@@ -3186,30 +3183,33 @@ async function flushSave(silent){
 }
 
 /* ---------------- Toolbar ---------------- */
+/* remember the last selection inside the note, because opening a dropdown or the
+   colour picker moves focus away and the formatting would otherwise hit nothing */
+let _noteRange = null;
+function rememberNoteRange(){
+  const ed = document.getElementById('editable'); const sel = window.getSelection();
+  if(ed && sel && sel.rangeCount && ed.contains(sel.anchorNode) && ed.contains(sel.focusNode)){
+    _noteRange = sel.getRangeAt(0).cloneRange();
+  }
+}
+document.addEventListener('selectionchange', rememberNoteRange);
+// also grab it the instant a toolbar control is touched, before focus moves away
+['pointerdown','touchstart','mousedown'].forEach(ev =>
+  document.addEventListener(ev, e => { if(e.target.closest && e.target.closest('.toolbar')) rememberNoteRange(); }, true));
+function noteFormat(cmd, val){
+  const ed = $('#editable'); ed.focus();
+  const sel = window.getSelection();
+  if(_noteRange && ed.contains(_noteRange.commonAncestorContainer)){ sel.removeAllRanges(); sel.addRange(_noteRange); }
+  document.execCommand(cmd, false, val == null ? null : val);
+  scheduleSave();
+}
 function bindToolbar(){
-  $$('[data-cmd]').forEach(btn => btn.onclick = () => {
-    document.execCommand(btn.dataset.cmd, false, null);
-    $('#editable').focus();
-    scheduleSave();
-  });
+  $$('[data-cmd]').forEach(btn => btn.onclick = () => noteFormat(btn.dataset.cmd));
   $('#imgBtn').onclick = insertDrivePhoto;
-  $('#markBtn').onclick = () => {
-    document.execCommand('hiliteColor', false, '#FFD166');
-    $('#editable').focus();
-    scheduleSave();
-  };
-  $('#fontFamily').onchange = (e) => {
-    document.execCommand('fontName', false, e.target.value);
-    $('#editable').focus(); scheduleSave();
-  };
-  $('#fontSize').onchange = (e) => {
-    document.execCommand('fontSize', false, e.target.value);
-    $('#editable').focus(); scheduleSave();
-  };
-  $('#fontColor').oninput = (e) => {
-    document.execCommand('foreColor', false, e.target.value);
-    $('#editable').focus(); scheduleSave();
-  };
+  $('#markBtn').onclick = () => noteFormat('hiliteColor', '#FFD166');
+  $('#fontFamily').onchange = (e) => noteFormat('fontName', e.target.value);
+  $('#fontSize').onchange = (e) => noteFormat('fontSize', e.target.value);
+  $('#fontColor').oninput = (e) => noteFormat('foreColor', e.target.value);
 }
 
 /* ---------------- Folder modal ---------------- */
