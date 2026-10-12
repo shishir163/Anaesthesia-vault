@@ -906,6 +906,9 @@ input,textarea,select{ font-family:inherit; }
 .cl-tags .badge{ font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:20px; }
 .cl-tagmenu .exam-tag-btn{ font-size:10.5px; padding:3px 8px; }
 
+
+.drive-photo{ margin:8px 0; }
+.drive-photo img{ max-width:100%; border-radius:10px; display:block; }
 </style>
 </head>
 <body>
@@ -1024,8 +1027,7 @@ input,textarea,select{ font-family:inherit; }
       <button data-cmd="italic" title="Italic"><i>I</i></button>
       <button data-cmd="underline" title="Underline"><u>U</u></button>
       <button id="markBtn" title="Highlighter">🖍</button>
-      <button id="imgBtn" title="Insert photo">🖼</button>
-      <input type="file" id="imgFile" accept="image/*" style="display:none;">
+      <button id="imgBtn" title="Insert a Google Drive photo or file link">🖼</button>
       <input type="color" id="fontColor" title="Text colour" value="#22D3EE">
       <span class="sep"></span>
       <button data-cmd="insertUnorderedList" title="Bullet list">•—</button>
@@ -1180,6 +1182,16 @@ input,textarea,select{ font-family:inherit; }
       </select>
     </div>
 
+    <div class="set-group" id="cloudGroup">
+      <label>CLOUD SYNC</label>
+      <div id="cloudInfo" style="font-size:13px;line-height:1.5;margin-bottom:8px;"></div>
+      <div id="cloudWarn" style="font-size:12px;line-height:1.5;color:var(--resp);margin-bottom:8px;display:none;"></div>
+      <div class="set-row" id="cloudBtns">
+        <button class="btn btn-ghost" id="cloudSyncNow" type="button">Sync now</button>
+        <button class="btn btn-ghost" id="cloudSignOut" type="button">Sign out</button>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-primary" id="settingsClose">Done</button>
     </div>
@@ -1189,6 +1201,13 @@ input,textarea,select{ font-family:inherit; }
 <div id="printArea"></div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Firebase (login + cloud sync). Kept inside the app so it also loads offline. -->
+<script src="./firebase-config.js"></script>
+<script src="./vendor/firebase-app-compat.js"></script>
+<script src="./vendor/firebase-auth-compat.js"></script>
+<script src="./vendor/firebase-firestore-compat.js"></script>
+<script src="./cloud.js"></script>
 
 <script>
 /* ============================================================
@@ -1321,9 +1340,10 @@ const DB = {
   },
   async setSetting(key, value){
     const store = await tx('settings','readwrite');
+    const rec = window.Cloud ? Cloud.stamp({ key, value }) : { key, value };
     return new Promise((res,rej)=>{
-      const r = store.put({ key, value });
-      r.onsuccess = ()=>res(true);
+      const r = store.put(rec);
+      r.onsuccess = ()=>{ if(window.Cloud) Cloud.wrote('settings', rec); res(true); };
       r.onerror = ()=>rej(r.error);
     });
   },
@@ -1435,9 +1455,15 @@ const DB = {
 
   async importAll({notes=[], folders=[], tasks=[], slots=[], activity=[], checklist=[]}){
     const db = await openDB();
+    // a restored backup counts as "just edited", so it also wins in the cloud
+    const groups = { notes, folders, tasks, slots, activity, checklist };
+    if(window.Cloud) Object.values(groups).forEach(arr => arr.forEach(r => Cloud.stamp(r)));
     return new Promise((res, rej) => {
       const t = db.transaction(['notes','folders','tasks','slots','activity','checklist'], 'readwrite');
-      t.oncomplete = () => res(true);
+      t.oncomplete = () => {
+        if(window.Cloud) Object.entries(groups).forEach(([s, arr]) => arr.forEach(r => Cloud.wrote(s, r)));
+        res(true);
+      };
       t.onerror = () => rej(t.error);
       t.onabort = () => rej(t.error);
       notes.forEach(n => t.objectStore('notes').put(n));
@@ -1449,6 +1475,50 @@ const DB = {
     });
   }
 };
+
+/* ---- cloud sync hooks ---------------------------------------
+   Every normal write also stamps the record and queues it for the
+   cloud. The raw* helpers below write locally WITHOUT queueing;
+   cloud.js uses them to apply changes that came from the cloud.   */
+Object.assign(DB, {
+  async rawAll(store){
+    const s = await tx(store);
+    return new Promise((res,rej)=>{ const r = s.getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); });
+  },
+  async rawGet(store, id){
+    const s = await tx(store);
+    return new Promise((res,rej)=>{ const r = s.get(id); r.onsuccess=()=>res(r.result||null); r.onerror=()=>rej(r.error); });
+  },
+  async rawPut(store, rec){
+    const s = await tx(store, 'readwrite');
+    return new Promise((res,rej)=>{ const r = s.put(rec); r.onsuccess=()=>res(true); r.onerror=()=>rej(r.error); });
+  },
+  async rawDelete(store, id){
+    const s = await tx(store, 'readwrite');
+    return new Promise((res,rej)=>{ const r = s.delete(id); r.onsuccess=()=>res(true); r.onerror=()=>rej(r.error); });
+  }
+});
+(function hookCloud(){
+  const puts = { putNote:'notes', putFolder:'folders', putTask:'tasks', putSlot:'slots', putActivity:'activity', putChecklist:'checklist' };
+  Object.keys(puts).forEach(fn => {
+    const orig = DB[fn].bind(DB);
+    DB[fn] = async (rec) => {
+      if(window.Cloud) Cloud.stamp(rec);
+      const out = await orig(rec);
+      if(window.Cloud) Cloud.wrote(puts[fn], rec);
+      return out;
+    };
+  });
+  const dels = { deleteNoteHard:'notes', deleteFolder:'folders', deleteTask:'tasks', deleteSlot:'slots', deleteChecklist:'checklist' };
+  Object.keys(dels).forEach(fn => {
+    const orig = DB[fn].bind(DB);
+    DB[fn] = async (id) => {
+      const out = await orig(id);
+      if(window.Cloud) Cloud.deleted(dels[fn], id);
+      return out;
+    };
+  });
+})();
 
 
 /* ============================================================
@@ -2771,6 +2841,7 @@ function openSettings(){
   $('#setWeekStart').value = String(s.weekStart);
   $('#setBackupEvery').value = String(s.backupReminderDays);
   $('#backupStatus').textContent = backupStatusText();
+  renderCloudInfo();
 
   $$('[data-theme-id]').forEach(b => b.onclick = async () => {
     state.settings.theme = b.dataset.themeId;
@@ -2778,6 +2849,58 @@ function openSettings(){
     $$('[data-theme-id]').forEach(x => x.classList.toggle('sel', x.dataset.themeId===state.settings.theme));
   });
   $('#settingsModal').classList.add('show');
+}
+
+/* ---- cloud sync: settings section + live refresh when another device changes something ---- */
+function renderCloudInfo(){
+  const grp = $('#cloudGroup'); if(!grp) return;
+  if(!window.Cloud || !Cloud.configured()){
+    $('#cloudInfo').innerHTML = 'Not set up. This app is saving on this device only. Fill in <b>firebase-config.js</b> to turn on login and cloud sync.';
+    $('#cloudBtns').style.display = 'none';
+    $('#cloudWarn').style.display = 'none';
+    return;
+  }
+  const s = Cloud.status();
+  const label = {
+    synced:'Everything is saved to the cloud.',
+    syncing:'Saving to the cloud… (' + s.pending + ' waiting)',
+    connecting:'Connecting to the cloud…',
+    offline:'Offline. Your changes are safe on this device and will upload when you are back online (' + s.pending + ' waiting).',
+    error:'Sync problem: ' + (s.error || 'unknown') + (s.pending ? ' (' + s.pending + ' waiting)' : '')
+  }[s.state] || '';
+  $('#cloudInfo').innerHTML = 'Signed in as <b>' + escapeHtml(s.email || '') + '</b><br>' + escapeHtml(label);
+  $('#cloudBtns').style.display = '';
+  const warn = $('#cloudWarn');
+  if(s.oversize.length){
+    warn.style.display = '';
+    warn.innerHTML = 'Too big to sync (usually embedded photos): <b>' + s.oversize.map(escapeHtml).join(', ') +
+      '</b>. These stay on this device only. Move the photos to Google Drive and insert the link instead.';
+  } else warn.style.display = 'none';
+}
+
+let _cloudRefreshTimer = null;
+function refreshFromCloud(){
+  clearTimeout(_cloudRefreshTimer);
+  _cloudRefreshTimer = setTimeout(doCloudRefresh, 250);
+}
+function userIsTyping(){
+  const a = document.activeElement;
+  return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+}
+async function doCloudRefresh(){
+  if(!window.__booted) return;
+  if(userIsTyping()){ _cloudRefreshTimer = setTimeout(doCloudRefresh, 3000); return; }
+  const unsaved = state.notes.filter(n => state.unsavedNewIds.has(n.id));
+  const fresh = await DB.getAllNotes();
+  state.notes = fresh.concat(unsaved.filter(u => !fresh.some(f => f.id === u.id)));
+  state.folders   = await DB.getAllFolders();
+  state.tasks     = await DB.getAllTasks();
+  state.slots     = await DB.getAllSlots();
+  state.activity  = await DB.getAllActivity();
+  state.checklist = await DB.getAllChecklist();
+  await loadSettings();
+  if($('#editorOverlay').classList.contains('show')){ renderSidebar(); toast('Updated from another device'); return; }
+  switchMode(state.mode);
 }
 
 async function commitSettingsForm(){
@@ -2937,39 +3060,42 @@ function renderDashboard(){
 }
 
 
-/* ---- insert a photo into the note, downscaled so the file stays small ---- */
-function insertPhoto(file){
-  return new Promise((resolve) => {
-    if(!file.type.startsWith('image/')){ toast('That file is not an image'); return resolve(); }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 1200;
-        let { width:w, height:h } = img;
-        if(w > MAX || h > MAX){
-          const r = Math.min(MAX/w, MAX/h);
-          w = Math.round(w*r); h = Math.round(h*r);
-        }
-        const cv = document.createElement('canvas');
-        cv.width = w; cv.height = h;
-        cv.getContext('2d').drawImage(img, 0, 0, w, h);
-        const dataUrl = cv.toDataURL('image/jpeg', 0.82);
-
-        $('#editable').focus();
-        document.execCommand('insertImage', false, dataUrl);
-        // leave the caret on a fresh line under the photo so a caption can be typed
-        document.execCommand('insertHTML', false, '<div><br></div>');
-        scheduleSave();
-        toast('Photo added — type your caption below it');
-        resolve();
-      };
-      img.onerror = () => { toast('Could not read that image'); resolve(); };
-      img.src = reader.result;
-    };
-    reader.onerror = () => { toast('Could not read that file'); resolve(); };
-    reader.readAsDataURL(file);
-  });
+/* ---- photos live in Google Drive; the note only keeps the link ----
+   Share the file as "Anyone with the link" to also see a preview inside the note. */
+function driveFileId(url){
+  const m = url.match(/\/d\/([A-Za-z0-9_-]{10,})/) || url.match(/[?&]id=([A-Za-z0-9_-]{10,})/);
+  return m ? m[1] : null;
+}
+function insertDrivePhoto(){
+  const ed = $('#editable');
+  const sel = window.getSelection();
+  const saved = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  const raw = prompt('Paste the Google Drive link of the photo or file.\n\nTip: set sharing to "Anyone with the link" to see a preview in the note.');
+  if(!raw) return;
+  const url = raw.trim();
+  if(!/^https?:\/\//i.test(url)){ toast('That does not look like a link'); return; }
+  // put the caret back where it was; if that spot is not inside the note, use the end of the note
+  ed.focus();
+  if(sel){
+    if(saved && ed.contains(saved.commonAncestorContainer)){ sel.removeAllRanges(); sel.addRange(saved); }
+    else if(!sel.rangeCount || !ed.contains(sel.anchorNode)){
+      const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+      sel.removeAllRanges(); sel.addRange(r);
+    }
+  }
+  const id = driveFileId(url);
+  let html;
+  if(id){
+    const view = 'https://drive.google.com/file/d/' + id + '/view';
+    html = '<div class="drive-photo"><a href="' + view + '" target="_blank" rel="noopener">' +
+           '<img src="https://drive.google.com/thumbnail?id=' + id + '&sz=w1000" alt="Drive photo"></a>' +
+           '<br><a href="' + view + '" target="_blank" rel="noopener">\u{1F4F7} Open photo in Drive</a></div><div><br></div>';
+  } else {
+    html = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">\u{1F4CE} Drive file</a>&nbsp;';
+  }
+  if(!document.execCommand('insertHTML', false, html)) ed.insertAdjacentHTML('beforeend', html);
+  scheduleSave();
+  toast('Drive link added');
 }
 
 /* ---------------- Editor ---------------- */
@@ -3066,12 +3192,7 @@ function bindToolbar(){
     $('#editable').focus();
     scheduleSave();
   });
-  $('#imgBtn').onclick = () => $('#imgFile').click();
-  $('#imgFile').onchange = async (e) => {
-    const f = e.target.files[0];
-    e.target.value = '';
-    if(f) await insertPhoto(f);
-  };
+  $('#imgBtn').onclick = insertDrivePhoto;
   $('#markBtn').onclick = () => {
     document.execCommand('hiliteColor', false, '#FFD166');
     $('#editable').focus();
@@ -3247,7 +3368,25 @@ if(!storageAvailable()){
     'Open this page in Chrome or Safari directly (not inside WhatsApp, Facebook or another app\u2019s built-in browser), ' +
     'then use the browser menu to Add to Home Screen.');
 } else {
-  boot().catch(function(err){
+  if(window.Cloud) Cloud.onRemote(refreshFromCloud);
+  Promise.resolve()
+  .then(function(){ return window.Cloud ? Cloud.gate() : 'local'; })   // login screen + first download, if cloud is set up
+  .then(function(){ return boot(); })
+  .then(function(){
+    window.__booted = true;
+    if(window.Cloud && Cloud.configured()){
+      refreshFromCloud();   // pick up anything that arrived while the app was starting
+      Cloud.mountChip(openSettings);
+      Cloud.onStatus(function(){ if($('#settingsModal').classList.contains('show')) renderCloudInfo(); });
+      $('#cloudSyncNow').onclick = function(){ Cloud.syncNow(); toast('Syncing…'); };
+      $('#cloudSignOut').onclick = function(){
+        const s = Cloud.status();
+        const warn = s.pending ? 'You have ' + s.pending + ' change(s) not uploaded yet. They stay on this device, but sign out anyway?' : 'Sign out of this device?';
+        if(confirm(warn)) Cloud.signOut();
+      };
+    }
+  })
+  .catch(function(err){
     console.error(err);
     fatalScreen('Something went wrong starting the app',
       'Please open this link in an up-to-date Chrome or Safari. If it keeps happening, note down which phone and browser you are using.<br><br>' +
